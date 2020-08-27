@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:rabbit="http://www.springframework.org/schema/rabbit"
+       xsi:schemaLocation="http://www.springframework.org/schema/rabbit
+           http://www.springframework.org/schema/rabbit/spring-rabbit.xsd
+           http://www.springframework.org/schema/beans
+           http://www.springframework.org/schema/beans/spring-beans.xsd">
+    <!--配置一个队列：    id routing key  auto-declare 自动删除 -->
+    <rabbit:queue id="my_ttl_queue" name="my_ttl_queue" auto-declare="true">
+        <!--路由到这个队列的消息如果在6秒没有被消费则会被清除-->
+        <rabbit:queue-arguments>
+            <entry key="x-message-ttl" value-type="long" value="15000"></entry>
+        </rabbit:queue-arguments>
+    </rabbit:queue>
+    <!--声明队列(死信队列) my_dlx_queue-->
+    <rabbit:queue id="my_dlx_queue" name="my_dlx_queue" auto-declare="true"/>
+    <!--声明交换机(死信交换机) my_dlx_exchang
+    死信队列里的消息到达这里后根据路由key转发到对应的队列-->
+    <rabbit:direct-exchange name="my_dlx_exchange" id="my_dlx_exchange" auto-declare="true">
+        <!--这个交换机通过路由键来转发消息到队列-->
+        <rabbit:bindings>
+            <rabbit:binding key="my_ttl_dlx" queue="my_dlx_queue"/>
+            <rabbit:binding key="my_max_dlx" queue="my_dlx_queue"/>
+        </rabbit:bindings>
+    </rabbit:direct-exchange>
+    <!--定义过期队列以及属性 my_ttl_dlx_queue  auto-declare:true不存在则自动创建
+    消息被转到这个队列后如果在设定的毫秒不消费则变为死信队列，转到my_dlx_exchange交换机-->
+    <rabbit:queue id="my_ttl_dlx_queue" name="my_ttl_dlx_queue" auto-declare="true">
+        <rabbit:queue-arguments>
+            <!--路由到此队列的消息如果在6秒内没有被消费则继续路由到my_dlx_exchange(死信交换机)交换机-->
+            <entry key="x-message-ttl" value-type="long" value="6000"/>
+            <entry key="x-dead-letter-exchange" value="my_dlx_exchange"/>
+        </rabbit:queue-arguments>
+    </rabbit:queue>
+    <rabbit:queue id="my_max_dlx_queue" name="my_max_dlx_queue" auto-declare="true">
+        <rabbit:queue-arguments>
+            <!--路由到此队列的消息如果这个队列超过2个消息没有被消费则会把队列第一个继续路由到my_dlx_exchange(死信交换机)交换机，
+            然后让新的消息入队-->
+            <entry key="x-max-length" value-type="long" value="2"/>
+            <entry key="x-dead-letter-exchange" value="my_dlx_exchange"/>
+        </rabbit:queue-arguments>
+    </rabbit:queue>
+    <!--定义定向交换机,根据不同的路由key来转发消息到队列
+     路由key为my_ttl_dlx的消息到了此交换机则转到my_ttl_dlx_queue队列-->
+    <rabbit:direct-exchange id="my_normal_exchange" name="my_normal_exchange" auto-declare="true">
+        <rabbit:bindings>
+            <rabbit:binding key="my_ttl_dlx" queue="my_ttl_dlx_queue"/>
+            <rabbit:binding key="my_max_dlx" queue="my_max_dlx_queue"/>
+        </rabbit:bindings>
+    </rabbit:direct-exchange>
+       <!--创建连接工厂  publisher-confirms="true" 启动了消息确认-->
+    <rabbit:connection-factory id="connectionFactory" host="${spring.rabbitmq.host}"
+                               port="${spring.rabbitmq.port}" username="${spring.rabbitmq.username}"
+                               password="${spring.rabbitmq.password}"
+                               virtual-host="${spring.rabbitmq.virtual-host}" publisher-confirms="true"/>
+
+
+</beans>

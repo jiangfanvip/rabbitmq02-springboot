@@ -1,0 +1,7 @@
+spring:
+  rabbitmq:
+    host: 106.52.248.12
+    port: 5672
+    username: jiangfan
+    password: 123456
+    virtual-host: /test01
